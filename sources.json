@@ -1,0 +1,26 @@
+{
+    "blacklisted": [
+        "fakenewsindia.com",
+        "whatsapp-rumors.co",
+        "realrawnews.com",
+        "infowars.com",
+        "theonion.com"
+    ],
+    "trusted": [
+        "pib.gov.in",
+        "reuters.com",
+        "thehindu.com",
+        "altnews.in",
+        "apnews.com",
+        "boomlive.in",
+        "factcheck.org",
+        "snopes.com",
+        "bbc.com",
+        "ndtv.com"
+    ],
+    "satire": [
+        "thefauxy.com",
+        "theonion.com",
+        "babylonbee.com"
+    ]
+}
