@@ -3,12 +3,14 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
+from exa_py import Exa
 
 # --- CONFIGURATION ---
 # API Keys
 API_KEY = os.environ.get("GROQ_API_KEY") or "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"
 GOOGLE_API_KEY = "AIzaSyDRQ7qnFbf2GAlqEBW43nt2xz39Ul50_FM"
 TAVILY_API_KEY = "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"
+EXA_API_KEY = os.environ.get("EXA_API_KEY") or "750d244e-525b-4288-b415-166065bbca48"
 
 import json
 import requests
@@ -38,6 +40,9 @@ if API_KEY:
         client = Groq(api_key=API_KEY)
     except Exception as e:
         print(f"Groq Init Error: {e}")
+
+# Initialize Exa Client
+exa = Exa(api_key=EXA_API_KEY)
 
 class AnalyzeRequest(BaseModel):
     text: str
@@ -172,16 +177,37 @@ class TruthLensEngine:
             print(f"Tavily API Error: {e}")
         return "Error getting live news."
 
-    async def verify_claim(self, claim, google_context, tavily_context):
+    async def search_exa(self, claim):
+        if not EXA_API_KEY: return "Exa Key Missing."
+        print(f"Searching Exa (Deep Search) for: {claim}")
+        try:
+            # SDK usage
+            result = exa.search(
+                query=claim,
+                type="auto",
+                num_results=3,
+                contents={"text": {"max_characters": 1000}}
+            )
+            
+            context = ""
+            for res in result.results:
+                pub_date = getattr(res, "published_date", "Unknown Date")
+                context += f"- [EXA DEEP SEARCH] ({pub_date}) {res.url}: {res.text[:300]}...\n"
+            return context
+        except Exception as e:
+            print(f"Exa API Error: {e}")
+            return "Error getting Exa results."
+
+    async def verify_claim(self, claim, google_context, tavily_context, exa_context):
         if not client: return {"score": 50, "verdict": "Error", "reasoning": "No AI Client"}
         
         system_prompt = """
         You are the "TruthLens Final Judge".
-        Your task is to verify a claim by weighing ARCHIVED Fact-Checks vs. LIVE News Reports.
+        Your task is to verify a claim by weighing ARCHIVED Fact-Checks vs. LIVE News Reports (Tavily) vs. deep semantic search (Exa).
         
         CRITICAL RULE: TEMPORAL GROUNDING
         - New events supercede old fact-checks.
-        - If Archive and Live sources conflict, prioritize the most recent Live News (Stage 3).
+        - If Archive and Live sources conflict, prioritize the most recent Live News/Exa results (Stage 3).
         
         SCORING MATRIX:
         1. [Verified Match] (90-100): Confirmed by reputable Live News sources OR recent Fact Checks.
@@ -201,6 +227,8 @@ class TruthLensEngine:
         {google_context or "No Archive Matches"}
         EVIDENCE 2: Tavily Live Search (Present):
         {tavily_context}
+        EVIDENCE 3: Exa Deep Search (Context):
+        {exa_context}
         """
         
         try:
@@ -244,8 +272,9 @@ class TruthLensEngine:
         main_claim = self.claims[0]
         google_evidence = await self.check_google_facts(main_claim)
         tavily_evidence = await self.search_tavily(main_claim)
+        exa_evidence = await self.search_exa(main_claim)
         
-        result = await self.verify_claim(main_claim, google_evidence, tavily_evidence)
+        result = await self.verify_claim(main_claim, google_evidence, tavily_evidence, exa_evidence)
         return result
 
 # Endpoint now uses the Class
