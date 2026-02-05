@@ -1,7 +1,7 @@
 import os
 from groq import Groq
 
-# Using the key from server.py
+
 API_KEY = "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"
 
 try:
