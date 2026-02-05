@@ -10,15 +10,12 @@ class ClaimData(pw.Schema):
     source: str
     timestamp: str
 
-# 2. Input Connector (HTTP Connector)
-# This creates an HTTP server on port 8081 that accepts POST requests with JSON data.
-# Each POST request is a "row" in the streaming table.
-input_table = pw.io.http.read(
-    host="0.0.0.0",
-    port=8081,
+# 2. Input Source: Watch a JSONL file in Real-Time
+# This is more robust than HTTP for a local demo.
+input_table = pw.io.json.read(
+    "live_stream.jsonl",
     schema=ClaimData,
-    input_format="json",
-    autocommit_duration_ms=1000
+    mode="streaming"
 )
 
 # 3. Processing (Real-time Analytics)

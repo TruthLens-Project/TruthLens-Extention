@@ -8,34 +8,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const analyzeManualBtn = document.getElementById('analyzeManualBtn');
     const statusMsg = document.getElementById('statusMsg');
 
-    // 1. Check for stored data from Context Menu
+    // 1. Check for stored data (Text, Link, or Image)
     chrome.storage.local.get(['lastAnalysis'], (result) => {
         if (result.lastAnalysis) {
             const data = result.lastAnalysis;
+            const timeDiff = Date.now() - data.timestamp;
 
-            // Show the capture section
-            captureSection.classList.remove('hidden');
+            // Only process if < 5 minutes old
+            if (timeDiff < 300000) {
+                captureSection.classList.remove('hidden');
 
-            // Format display based on type
-            if (data.type === 'text') {
-                captureLabel.textContent = "SELECTED TEXT";
-                captureContent.textContent = data.content;
-            } else if (data.type === 'link') {
-                captureLabel.textContent = "SELECTED LINK";
-                captureContent.textContent = data.content;
-            } else if (data.type === 'image') {
-                captureLabel.textContent = "CAPTURED IMAGE";
-                captureContent.innerHTML = ''; // Clear text
-                const img = document.createElement('img');
-                img.src = data.content;
-                img.style.maxWidth = '100%';
-                img.style.border = '1px solid #ddd';
-                captureContent.appendChild(img);
+                if (data.type === 'image') {
+                    // Vision Mode
+                    captureLabel.textContent = "CAPTURED SCREENSHOT";
+                    captureContent.innerHTML = '';
+                    const img = document.createElement('img');
+                    img.src = data.content;
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '4px';
+                    captureContent.appendChild(img);
+
+                    analyzeCapturedBtn.textContent = "Analyze Image";
+
+                    analyzeCapturedBtn.onclick = () => {
+                        statusMsg.textContent = "Uploading Image to Vision AI...";
+                        statusMsg.style.display = 'block';
+
+                        fetch('http://localhost:8000/analyze-image', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image: data.content })
+                        })
+                            .then(handleResponse)
+                            .catch(handleError);
+                    };
+                } else {
+                    // Text/Link Mode
+                    captureLabel.textContent = data.type === 'link' ? "CAPTURED LINK" : "CAPTURED TEXT";
+                    captureContent.textContent = data.content;
+                    analyzeCapturedBtn.textContent = "Analyze This";
+
+                    analyzeCapturedBtn.onclick = () => {
+                        // We need the sendToBackend function which is defined later? 
+                        // Actually sendToBackend calls handleResponse.
+                        // Let's assume sendToBackend is global or we define logic here.
+                        statusMsg.textContent = "Analyzing...";
+                        statusMsg.style.display = 'block';
+
+                        fetch('http://localhost:8000/analyze', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: data.content })
+                        })
+                            .then(handleResponse)
+                            .catch(handleError);
+                    };
+                }
             }
-
-            // Clear the badge since we've seen it
-            chrome.action.setBadgeText({ text: "" });
+            // Clear it so it doesn't persist forever
+            chrome.storage.local.remove('lastAnalysis');
         }
+
+        // Clear the badge since we've seen it
+        chrome.action.setBadgeText({ text: "" });
     });
 
     // 2. Handle "Analyze This" (Captured Data)

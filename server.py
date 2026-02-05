@@ -1,10 +1,14 @@
 import os
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from groq import Groq
 from exa_py import Exa
+
+import json
+import requests
+import time # Added for timestamp
 
 # --- CONFIGURATION ---
 # API Keys
@@ -98,6 +102,11 @@ class TruthLensEngine:
         2. Atomicity: Split complex sentences into individual facts.
         3. Specificity: Include dates, locations, and specific details if available.
         4. Ignore: Opinions, questions, greetings, or vague statements.
+        5. TRANSLATION (CRITICAL):
+           - The input might be in Hindi, "Hinglish" (Hindi written in English), or mixed.
+           - YOU MUST TRANSLATE EVERYTHING TO PURE ENGLISH CLAIMS.
+           - Example Input: "Modi ji ne note band kar diya." -> Claim: "Narendra Modi announced demonetization of currency notes."
+        6. IGNORE: "Verdict: Uncheckable" or meta-commentary. Just extract the core claim asserted.
         
         Return a valid JSON object: {"claims": ["string", "string"]}
         """
@@ -217,9 +226,18 @@ class TruthLensEngine:
         4. [Likely False] (10-29): Contradicted by reliable sources.
         5. [Verified False] (0-9): Debunked by Fact Checkers or widely reported as false.
         
+        SPECIAL RULE FOR "UNCHECKABLE":
+        - Do NOT return "Uncheckable" just because the claim is vague. Attempt to infer the context (e.g., "DC Blinked" -> "US Government yielded").
+        - Only return "Uncheckable" if the text is pure gibberish or purely personal opinion (e.g., "I like tea").
+        
         OUTPUT FORMAT:
         Provide the output as a valid JSON object.
         {"score": int, "verdict": "str", "reasoning": "str"}
+        
+        BHARAT MODE (MULTI-LINGUAL):
+        - If the claim is relevant to India or the input language seems to be Hindi/Indian-Regional, provide the 'reasoning' value in this format:
+          "English Explanation... \n\n🇮🇳 Hindi: [Hindi Translation of Exception]"
+        - Otherwise, just provide English.
         """
         
         user_prompt = f"""
@@ -299,24 +317,69 @@ class TruthLensEngine:
         
         result = await self.verify_claim(main_claim, google_evidence, tavily_evidence, exa_evidence)
         
-        # --- PATHWAY FORWARDING (Fire & Forget) ---
         try:
-            # Send to Pathway Brain for Real-Time Dashboard
+            forward_data_time = str(int(time.time()))
+            # Send to Pathway Brain for Real-Time Dashboard (FILE STREAMING)
             forward_data = {
                 "text": main_claim,
                 "verdict": result.get("verdict", "Unknown"),
                 "score": result.get("score", 0),
                 "source": source_url or "Unknown",
-                "timestamp": "now" # Pathway handles ingestion time usually
+                "timestamp": forward_data_time 
             }
-            # We use a simple request, don't wait for response to speed up UI
-            # Using asyncio.create_task or just a quick request with short timeout
-            requests.post("http://localhost:8081", json=forward_data, timeout=0.1)
-        except Exception as e:
-            print(f"Warning: Could not forward to Pathway Brain: {e}")
+            # Append to the file that Pathway is watching
+            with open("live_stream.jsonl", "a") as f:
+                f.write(json.dumps(forward_data) + "\n")
+        except Exception: pass
         # ------------------------------------------
 
         return result
+
+    async def analyze_image(self, image_data):
+        if not client: return {"error": "No AI Client"}
+        print("Analyzing Image with Llama 3.2 Vision...")
+        
+        try:
+            # 1. Vision Analysis (OCR + Claim Extraction)
+            completion = client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract the main text/headline from this image. Then, just like a fact-checker, identify the core claim. Return ONLY the claim text."},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image_data
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.0,
+                max_tokens=200
+            )
+            extracted_claim = completion.choices[0].message.content.strip()
+            print(f"Extracted Claim: {extracted_claim}")
+            
+            # 2. Verify the extracted claim
+            return await self.run_pipeline(extracted_claim, source_url="Image/Screenshot")
+            
+        except Exception as e:
+            print(f"Vision Error: {e}")
+            return {"error": str(e)}
+
+@app.post("/analyze-image")
+async def api_analyze_image(request: Request):
+    data = await request.json()
+    image_data = data.get("image") # Base64 data url
+    
+    if not image_data:
+        raise HTTPException(status_code=400, detail="No image provided")
+        
+    engine = TruthLensEngine()
+    return await engine.analyze_image(image_data)
 
 # Endpoint now uses the Class
 @app.post("/analyze")
