@@ -142,57 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 6. Handle "Verify Video Audio"
-    const verifyAudioBtn = document.getElementById('verifyAudioBtn');
-    if (verifyAudioBtn) {
-        verifyAudioBtn.addEventListener('click', () => {
-            statusMsg.style.display = 'block';
-            statusMsg.textContent = "Requesting Audio Capture...";
-            statusMsg.style.color = "#e67e22";
 
-            // Direct Capture in Popup (requires popup to stay open)
-            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
-                if (chrome.runtime.lastError || !stream) {
-                    statusMsg.textContent = "Capture Failed: " + (chrome.runtime.lastError ? chrome.runtime.lastError.message : "No Stream");
-                    return;
-                }
-
-                statusMsg.textContent = "Recording Audio (15s)... DO NOT CLOSE POPUP.";
-
-                // 2. Record the stream
-                const mediaRecorder = new MediaRecorder(stream);
-                const audioChunks = [];
-
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
-                    }
-                };
-
-                mediaRecorder.onstop = () => {
-                    console.log("Recording stopped. Processing...");
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-
-                    // Stop all tracks to release the stream
-                    stream.getTracks().forEach(track => track.stop());
-
-                    // Send to Backend
-                    statusMsg.textContent = "Analyzing Audio... Please Wait.";
-                    sendAudioToBackend(audioBlob);
-                };
-
-                // Start recording
-                mediaRecorder.start();
-
-                // Stop after 15 seconds automatically
-                setTimeout(() => {
-                    if (mediaRecorder.state === "recording") {
-                        mediaRecorder.stop();
-                    }
-                }, 15000);
-            });
-        });
-    }
 
     // 7. Handle "Manual Record"
     const startRecordBtn = document.getElementById('startRecordBtn');
