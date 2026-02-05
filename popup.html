@@ -2,6 +2,7 @@
 <html>
 
 <head>
+  <meta charset="utf-8">
   <title>TruthLens</title>
   <style>
     body {
@@ -104,6 +105,16 @@
     <label>CURRENT TAB</label>
     <button id="analyzeArticleBtn">Analyze Article on Page</button>
     <button id="smartScreenshotBtn" style="margin-top: 5px; background-color: #9b59b6;">Smart Screenshot</button>
+    <button id="verifyAudioBtn" style="margin-top: 5px; background-color: #e67e22;">Verify Video Audio (15s)</button>
+  </div>
+
+  <!-- MANUAL AUDIO SECTION -->
+  <div class="section-title">MANUAL AUDIO VERIFICATION</div>
+  <div class="section" id="manualAudioSection">
+    <button id="startRecordBtn" class="btn btn-warning">🎙 Start Recording</button>
+    <button id="stopRecordBtn" class="btn btn-danger hidden">⏹ Stop & Analyze</button>
+    <div id="recordingStatus" class="status-msg hidden" style="color: #e74c3c; margin-top:5px;">● Recording...</div>
+    <div id="audioLog" class="live-log"></div>
   </div>
 
   <!-- Manual Link Input -->

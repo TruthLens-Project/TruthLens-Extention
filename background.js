@@ -79,4 +79,79 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.action.setBadgeText({ text: "!" });
     chrome.action.setBadgeBackgroundColor({ color: "#2ecc71" }); // Green for social?
   }
+
+  // Handle Audio Capture for Video Verification
+  if (request.action === "START_AUDIO_CAPTURE") {
+    console.log("Starting Audio Capture...");
+
+    // 1. Capture the tab audio stream
+    chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+      if (chrome.runtime.lastError || !stream) {
+        console.error("Capture failed:", chrome.runtime.lastError);
+        sendResponse({ success: false, error: "Capture failed" });
+        return;
+      }
+
+      // 2. Record the stream
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log("Recording stopped. Processing...");
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+        // Stop all tracks to release the stream
+        stream.getTracks().forEach(track => track.stop());
+
+        // Send to Backend
+        sendAudioToBackend(audioBlob);
+      };
+
+      // Start recording
+      mediaRecorder.start();
+
+      // Stop after 15 seconds automatically (for now)
+      setTimeout(() => {
+        if (mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+      }, 15000);
+
+      sendResponse({ success: true, message: "Recording started (15s limit)" });
+    });
+
+    return true; // Async response
+  }
 });
+
+function sendAudioToBackend(blob) {
+  const formData = new FormData();
+  formData.append("file", blob, "audio_capture.wav");
+
+  console.log("Sending audio to backend...");
+
+  fetch("http://localhost:8000/analyze-audio", {
+    method: "POST",
+    body: formData
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Audio Analysis Result:", data);
+
+      // Store result to show in popup
+      chrome.storage.local.set({ "lastAudioAnalysis": data }, () => {
+        // Notify popup if open? Or just badge
+        chrome.action.setBadgeText({ text: "AUDIO" });
+        chrome.action.setBadgeBackgroundColor({ color: "#e67e22" });
+      });
+    })
+    .catch(error => {
+      console.error("Error sending audio:", error);
+    });
+}

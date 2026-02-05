@@ -11,7 +11,7 @@ pkill -f "python3 server.py" 2>/dev/null
 echo "Checking dependencies..."
 if ! python3 -c "import exa_py, fastapi, uvicorn" &> /dev/null; then
     echo "Installing missing dependencies..."
-    pip3 install exa-py fastapi uvicorn requests python-dotenv groq
+    pip3 install exa-py fastapi uvicorn requests python-dotenv groq python-multipart websockets
 fi
 
 # Run server

@@ -1,7 +1,8 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 from groq import Groq
 from exa_py import Exa
 
@@ -245,6 +246,28 @@ class TruthLensEngine:
         except Exception as e:
             return {"score": 50, "verdict": "Error", "reasoning": str(e)}
 
+    async def transcribe_audio(self, audio_file):
+        if not client: return "No AI Client for transcription."
+        print(f"Transcribing audio file...")
+        try:
+            # Create a temporary file to save the uploaded audio
+            with open("temp_audio.wav", "wb") as f:
+                f.write(await audio_file.read())
+            
+            with open("temp_audio.wav", "rb") as file:
+                transcription = client.audio.transcriptions.create(
+                    file=(file.name, file.read()),
+                    model="whisper-large-v3",
+                    response_format="text"
+                )
+            return transcription
+        except Exception as e:
+            print(f"Transcription Error: {e}")
+            return f"Error transcribing audio: {e}"
+        finally:
+            if os.path.exists("temp_audio.wav"):
+                os.remove("temp_audio.wav")
+
     async def run_pipeline(self, text, source_url):
         print(f"Pipeline started for: {text[:50]}...")
         
@@ -275,6 +298,24 @@ class TruthLensEngine:
         exa_evidence = await self.search_exa(main_claim)
         
         result = await self.verify_claim(main_claim, google_evidence, tavily_evidence, exa_evidence)
+        
+        # --- PATHWAY FORWARDING (Fire & Forget) ---
+        try:
+            # Send to Pathway Brain for Real-Time Dashboard
+            forward_data = {
+                "text": main_claim,
+                "verdict": result.get("verdict", "Unknown"),
+                "score": result.get("score", 0),
+                "source": source_url or "Unknown",
+                "timestamp": "now" # Pathway handles ingestion time usually
+            }
+            # We use a simple request, don't wait for response to speed up UI
+            # Using asyncio.create_task or just a quick request with short timeout
+            requests.post("http://localhost:8081", json=forward_data, timeout=0.1)
+        except Exception as e:
+            print(f"Warning: Could not forward to Pathway Brain: {e}")
+        # ------------------------------------------
+
         return result
 
 # Endpoint now uses the Class
@@ -284,6 +325,126 @@ async def analyze_text(request: AnalyzeRequest):
     engine = TruthLensEngine()
     result = await engine.run_pipeline(request.text, request.source_url)
     return result
+
+from fastapi import UploadFile, File
+
+@app.post("/analyze-audio")
+async def analyze_audio(file: UploadFile = File(...)):
+    engine = TruthLensEngine()
+    
+    # 1. Transcribe
+    transcription = await engine.transcribe_audio(file)
+    print(f"Transcription: {transcription[:100]}...")
+    
+    # 2. Run Pipeline on Transcribed Text
+    # We use a dummy URL or the filename for context
+    result = await engine.run_pipeline(transcription, source_url="Audio Transcription")
+    
+    # Attach transcription to debug (optional)
+    result["transcription_snippet"] = transcription[:200]
+    return result
+
+# ==========================================
+# REAL-TIME WEBSOCKET ENDPOINT
+# ==========================================
+@app.websocket("/ws/live-monitor")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("WebSocket Connected: Receiving Live Audio Stream...")
+    
+    engine = TruthLensEngine()
+    
+    try:
+        while True:
+            # Receive a complete audio chunk (blob) from frontend
+            # Frontend will now send ~3s valid clips
+            data = await websocket.receive_bytes()
+            
+            print(f"Received Audio Chunk: {len(data)} bytes")
+            
+            # 1. Save to temp file
+            temp_filename = f"live_chunk_{id(websocket)}.webm"
+            with open(temp_filename, "wb") as f:
+                f.write(data)
+            
+            # 2. Transcribe
+            transcription = ""
+            try:
+                with open(temp_filename, "rb") as file:
+                    if client:
+                        transcription = client.audio.transcriptions.create(
+                            file=(temp_filename, file.read()),
+                            model="whisper-large-v3",
+                            response_format="text"
+                        )
+                    else:
+                         # Fallback purely for testing if API fails
+                        transcription = "" 
+            except Exception as e:
+                print(f"Live Transcribe Error: {e}")
+            
+            # Clean up
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
+
+            # 3. Verify
+            clean_text = str(transcription).strip()
+            print(f"Transcription Result: '{clean_text}'")
+
+            if len(clean_text) > 5: # Lower threshold causing issues?
+                # Send "Processing" status
+                await websocket.send_json({"status": "processing", "text": clean_text})
+                
+                # Check claim
+                result = await engine.run_pipeline(clean_text, source_url="Live Stream")
+                
+                await websocket.send_json({
+                    "status": "complete",
+                    "text": clean_text,
+                    "verdict": result.get("verdict", "Unknown"),
+                    "score": result.get("score", 50),
+                    "reasoning": result.get("reasoning", "No info")
+                })
+            else:
+                print(f"Skipping: Text too short or empty ({len(clean_text)} chars)")
+                # Optional: Send keep-alive or silence notice? 
+                # Better to settle for silence to not spam UI
+                pass
+                    
+    except WebSocketDisconnect:
+        print("WebSocket Disconnected")
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+
+@app.get("/dashboard-data")
+async def get_dashboard_data():
+    """Reads the latest stats from Pathway's JSONL output."""
+    stats_file = "stream_stats.jsonl"
+    recent_file = "stream_claims.jsonl"
+    
+    data = {"stats": [], "recent": []}
+    
+    # Read Stats
+    if os.path.exists(stats_file):
+        with open(stats_file, "r") as f:
+            lines = f.readlines()
+            for line in lines[-10:]: # Last 10 updates
+                try:
+                   data["stats"].append(json.loads(line))
+                except: pass
+    
+    # Read Recent Claims
+    if os.path.exists(recent_file):
+         with open(recent_file, "r") as f:
+            lines = f.readlines()
+            # Reverse order (newest first)
+            for line in reversed(lines[-5:]): 
+                try:
+                   data["recent"].append(json.loads(line))
+                except: pass
+                
+    return data
+
 
 if __name__ == "__main__":
     import uvicorn

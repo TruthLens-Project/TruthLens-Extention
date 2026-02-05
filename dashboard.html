@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthLens Global Dashboard (Pathway Powered)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .pathway-badge {
+            background: #2c3e50;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #ecf0f1;
+            border: 1px solid #34495e;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: #252525;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .stat-box {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .feed-item {
+            background: #333;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #555;
+        }
+
+        .feed-verdict {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .feed-text {
+            font-size: 13px;
+            color: #ddd;
+            margin-top: 5px;
+        }
+
+        .feed-meta {
+            font-size: 10px;
+            color: #777;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .v-match {
+            border-color: #2ecc71;
+            color: #2ecc71;
+        }
+
+        .v-false {
+            border-color: #e74c3c;
+            color: #e74c3c;
+        }
+
+        .v-likely {
+            border-color: #f1c40f;
+            color: #f1c40f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="logo">TruthLens <span style="font-weight:lighter; font-size: 16px;">Global Brain</span></div>
+        <div class="pathway-badge">⚡ Powered by Pathway Stream Processing</div>
+    </div>
+
+    <div class="grid">
+        <!-- Left: Aggregated Stats -->
+        <div class="card">
+            <div class="card-title">Real-Time Stats</div>
+            <div id="statsContainer">
+                <div style="text-align: center; color: #666;">Waiting for stream...</div>
+            </div>
+        </div>
+
+        <!-- Right: Recent Feed -->
+        <div class="card">
+            <div class="card-title">Live Claim Stream</div>
+            <div id="feedContainer">
+                <!-- Feed items will go here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateDashboard() {
+            fetch('http://localhost:8000/dashboard-data')
+                .then(response => response.json())
+                .then(data => {
+                    // 1. Update Stats
+                    const statsDiv = document.getElementById('statsContainer');
+                    if (data.stats && data.stats.length > 0) {
+                        statsDiv.innerHTML = '';
+                        data.stats.reverse().forEach(stat => {
+                            // stat uses 'verdict' and 'count' from Pathway groupby
+                            const color = stat.verdict.includes('True') || stat.verdict.includes('Match') ? '#2ecc71' :
+                                stat.verdict.includes('False') ? '#e74c3c' : '#f1c40f';
+
+                            const html = `
+                                <div class="stat-box">
+                                    <div class="stat-value" style="color: ${color}">${stat.count}</div>
+                                    <div class="stat-label">${stat.verdict}</div>
+                                </div>
+                            `;
+                            statsDiv.innerHTML += html;
+                        });
+                    }
+
+                    // 2. Update Feed
+                    const feedDiv = document.getElementById('feedContainer');
+                    if (data.recent && data.recent.length > 0) {
+                        feedDiv.innerHTML = '';
+                        data.recent.forEach(item => {
+                            let borderClass = 'v-likely';
+                            if (item.verdict.includes('Match') || item.verdict.includes('True')) borderClass = 'v-match';
+                            else if (item.verdict.includes('False')) borderClass = 'v-false';
+
+                            const html = `
+                                <div class="feed-item ${borderClass}">
+                                    <div class="feed-verdict ${borderClass}">${item.verdict} (${item.score}%)</div>
+                                    <div class="feed-text">"${item.text}"</div>
+                                    <div class="feed-meta">
+                                        <span>Source: ${item.source.substring(0, 30)}</span>
+                                        <span>Live Ingestion</span>
+                                    </div>
+                                </div>
+                            `;
+                            feedDiv.innerHTML += html;
+                        });
+                    }
+                })
+                .catch(err => console.error("Error fetching dashboard data:", err));
+        }
+
+        // Poll every 2 seconds
+        setInterval(updateDashboard, 2000);
+        updateDashboard();
+    </script>
+</body>
+
+</html>

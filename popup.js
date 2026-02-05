@@ -107,6 +107,214 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 6. Handle "Verify Video Audio"
+    const verifyAudioBtn = document.getElementById('verifyAudioBtn');
+    if (verifyAudioBtn) {
+        verifyAudioBtn.addEventListener('click', () => {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = "Requesting Audio Capture...";
+            statusMsg.style.color = "#e67e22";
+
+            // Direct Capture in Popup (requires popup to stay open)
+            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+                if (chrome.runtime.lastError || !stream) {
+                    statusMsg.textContent = "Capture Failed: " + (chrome.runtime.lastError ? chrome.runtime.lastError.message : "No Stream");
+                    return;
+                }
+
+                statusMsg.textContent = "Recording Audio (15s)... DO NOT CLOSE POPUP.";
+
+                // 2. Record the stream
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    console.log("Recording stopped. Processing...");
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+                    // Stop all tracks to release the stream
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Send to Backend
+                    statusMsg.textContent = "Analyzing Audio... Please Wait.";
+                    sendAudioToBackend(audioBlob);
+                };
+
+                // Start recording
+                mediaRecorder.start();
+
+                // Stop after 15 seconds automatically
+                setTimeout(() => {
+                    if (mediaRecorder.state === "recording") {
+                        mediaRecorder.stop();
+                    }
+                }, 15000);
+            });
+        });
+    }
+
+    // 7. Handle "Manual Record"
+    const startRecordBtn = document.getElementById('startRecordBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
+    const recordingStatus = document.getElementById('recordingStatus');
+    const audioLog = document.getElementById('audioLog');
+
+    let manualRecorder = null;
+    let manualChunks = [];
+    let manualStream = null;
+
+    if (startRecordBtn && stopRecordBtn) {
+        startRecordBtn.addEventListener('click', () => {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = "Initializing Recorder...";
+
+            chrome.tabCapture.capture({ audio: true, video: false }, (stream) => {
+                if (chrome.runtime.lastError || !stream) {
+                    statusMsg.textContent = "Capture Failed: " + (chrome.runtime.lastError ? chrome.runtime.lastError.message : "No Stream");
+                    return;
+                }
+
+                // FIX: Play the audio locally
+                const audioCtx = new AudioContext();
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(audioCtx.destination);
+
+                manualStream = stream;
+                manualChunks = []; // Reset
+
+                try {
+                    manualRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+                } catch (e) {
+                    statusMsg.textContent = "Recorder Init Failed: " + e.message;
+                    return;
+                }
+
+                manualRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) manualChunks.push(e.data);
+                };
+
+                manualRecorder.onstop = () => {
+                    // Combine into one big blob
+                    const fullBlob = new Blob(manualChunks, { type: 'audio/webm;codecs=opus' });
+                    console.log("Full Blob Size:", fullBlob.size);
+
+                    if (fullBlob.size > 0) {
+                        statusMsg.textContent = "Analyzing Full Audio...";
+                        audioLog.innerHTML += `<div style="color: blue;">Analyzing ${Math.round(fullBlob.size / 1024)} KB...</div>`;
+                        sendAudioToBackend(fullBlob);
+                    } else {
+                        statusMsg.textContent = "Recording was empty.";
+                    }
+
+                    // Stop tracks
+                    if (manualStream) {
+                        manualStream.getTracks().forEach(t => t.stop());
+                    }
+                };
+
+                // Start
+                manualRecorder.start();
+
+                // UI Updates
+                startRecordBtn.classList.add('hidden');
+                stopRecordBtn.classList.remove('hidden');
+                recordingStatus.classList.remove('hidden');
+                statusMsg.textContent = "Recording Active... Listen to the claim.";
+            });
+        });
+
+        stopRecordBtn.addEventListener('click', () => {
+            if (manualRecorder && manualRecorder.state === "recording") {
+                manualRecorder.stop();
+
+                // UI Updates
+                startRecordBtn.classList.remove('hidden');
+                stopRecordBtn.classList.add('hidden');
+                recordingStatus.classList.add('hidden');
+            }
+        });
+    }
+
+    function sendAudioToBackend(blob) {
+        const formData = new FormData();
+        formData.append("file", blob, "audio_capture.wav");
+
+        fetch("http://localhost:8000/analyze-audio", {
+            method: "POST",
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                statusMsg.style.display = 'none';
+
+                // Show Result
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'section';
+                resultDiv.style.borderLeft = data.score > 70 ? "5px solid #2ecc71" : "5px solid #e74c3c";
+
+                resultDiv.innerHTML = `
+            <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px; color: #e67e22;">
+                [AUDIO] Verdict: ${data.verdict || "Analysis Complete"}
+            </div>
+            <div style="font-size: 14px; margin-bottom: 10px;">
+                Truth Score: <strong>${data.score || "N/A"}/100</strong>
+            </div>
+            <div style="font-size: 12px; margin-bottom: 10px; font-style: italic; color: #666;">
+                Transcription: "${data.transcription_snippet || ""}..."
+            </div>
+            <div style="font-size: 13px; color: #555; line-height: 1.4;">
+                ${data.reasoning || "No reasoning provided."}
+            </div>
+            `;
+
+                // Insert after capture section
+                captureSection.parentNode.insertBefore(resultDiv, captureSection.nextSibling);
+            })
+            .catch(error => {
+                console.error("Error sending audio:", error);
+                statusMsg.textContent = "Analysis Failed: " + error.message;
+            });
+    }
+
+    // Check for Audio Analysis Result specifically
+    chrome.storage.local.get(['lastAudioAnalysis'], (result) => {
+        if (result.lastAudioAnalysis) {
+            const data = result.lastAudioAnalysis;
+            // Clear storage so we don't show it forever
+            chrome.storage.local.remove(['lastAudioAnalysis']);
+
+            chrome.action.setBadgeText({ text: "" });
+
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'section';
+            resultDiv.style.borderLeft = data.score > 70 ? "5px solid #2ecc71" : "5px solid #e74c3c";
+
+            resultDiv.innerHTML = `
+            <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px; color: #e67e22;">
+                [AUDIO] Verdict: ${data.verdict || "Analysis Complete"}
+            </div>
+            <div style="font-size: 14px; margin-bottom: 10px;">
+                Truth Score: <strong>${data.score || "N/A"}/100</strong>
+            </div>
+            <div style="font-size: 12px; margin-bottom: 10px; font-style: italic; color: #666;">
+                Transcription: "${data.transcription_snippet || ""}..."
+            </div>
+            <div style="font-size: 13px; color: #555; line-height: 1.4;">
+                ${data.reasoning || "No reasoning provided."}
+            </div>
+            `;
+
+            // Insert at top or specific place
+            captureSection.parentNode.insertBefore(resultDiv, captureSection.nextSibling);
+        }
+    });
+
     function simulateAnalysis(content) {
         statusMsg.style.display = 'block';
         statusMsg.textContent = "Analyzing with AI...";
