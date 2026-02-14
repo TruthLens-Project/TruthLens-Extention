@@ -5,91 +5,330 @@
   <meta charset="utf-8">
   <title>TruthLens</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
     body {
-      width: 320px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      padding: 15px;
-      background-color: #f8f9fa;
-      color: #333;
+      width: 370px;
+      min-height: 480px;
+      font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 0;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      color: #e0e0e0;
+      overflow-x: hidden;
+      position: relative;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
+    /* ── Animated floating orbs ── */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.35;
+      z-index: 0;
+      pointer-events: none;
+      animation: floatOrb 8s ease-in-out infinite alternate;
+    }
+
+    body::before {
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, #6c5ce7, #a29bfe);
+      top: -60px;
+      left: -40px;
+    }
+
+    body::after {
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, #fd79a8, #e84393);
+      bottom: -50px;
+      right: -30px;
+      animation-delay: 4s;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(30px, 20px) scale(1.15); }
+    }
+
+    /* ── Main container ── */
+    .popup-container {
+      position: relative;
+      z-index: 1;
+      padding: 22px 20px 18px;
+    }
+
+    /* ── Header / Title ── */
     h1 {
-      font-size: 18px;
+      font-size: 22px;
+      font-weight: 800;
       margin-top: 0;
-      color: #2c3e50;
-      border-bottom: 2px solid #3498db;
-      padding-bottom: 10px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, #a29bfe, #fd79a8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.3px;
+      position: relative;
+      padding-bottom: 12px;
     }
 
+    h1::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, #6c5ce7, #a29bfe, #fd79a8, transparent);
+      border-radius: 2px;
+    }
+
+    /* ── Glass Section Cards ── */
     .section {
-      margin-bottom: 20px;
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
+    .section:hover {
+      border-color: rgba(162, 155, 254, 0.25);
+      box-shadow: 0 8px 32px rgba(108, 92, 231, 0.15),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* ── Section Title (standalone, e.g. MANUAL AUDIO) ── */
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.8px;
+      background: linear-gradient(135deg, #a29bfe, #fd79a8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      padding-left: 2px;
+    }
+
+    /* ── Labels ── */
     label {
       font-weight: 600;
       display: block;
-      margin-bottom: 5px;
-      font-size: 12px;
-      color: #7f8c8d;
+      margin-bottom: 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: rgba(162, 155, 254, 0.85);
     }
 
+    /* ── Content box (captured content preview) ── */
     .content-box {
-      font-size: 14px;
-      line-height: 1.4;
+      font-size: 13px;
+      line-height: 1.5;
       word-wrap: break-word;
       max-height: 100px;
       overflow-y: auto;
-      background: #f1f3f5;
-      padding: 8px;
-      border-radius: 4px;
-      border: 1px solid #e9ecef;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #c8c8d0;
     }
 
+    /* ── Custom scrollbar ── */
+    .content-box::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .content-box::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .content-box::-webkit-scrollbar-thumb {
+      background: rgba(162, 155, 254, 0.4);
+      border-radius: 4px;
+    }
+
+    /* ── Text Input ── */
     input[type="text"] {
       width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      box-sizing: border-box;
-      /* Fix padding issues */
+      padding: 11px 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: #e0e0e0;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    input[type="text"]:focus {
+      border-color: rgba(162, 155, 254, 0.6);
+      box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.15),
+                  0 0 20px rgba(108, 92, 231, 0.1);
+    }
+
+    /* ── Buttons (Primary — violet gradient) ── */
     button {
       width: 100%;
       margin-top: 10px;
-      padding: 8px;
-      background-color: #3498db;
-      color: white;
+      padding: 11px 16px;
+      background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+      color: #ffffff;
       border: none;
-      border-radius: 4px;
+      border-radius: 10px;
       cursor: pointer;
-      font-weight: bold;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.3px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      transition: left 0.5s ease;
     }
 
     button:hover {
-      background-color: #2980b9;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(108, 92, 231, 0.45);
     }
 
+    button:hover::before {
+      left: 100%;
+    }
+
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(108, 92, 231, 0.3);
+    }
+
+    /* ── Smart Screenshot Button (magenta gradient) ── */
+    .btn-screenshot {
+      background: linear-gradient(135deg, #fd79a8, #e84393) !important;
+      box-shadow: 0 4px 15px rgba(232, 67, 147, 0.3) !important;
+    }
+
+    .btn-screenshot:hover {
+      box-shadow: 0 6px 25px rgba(232, 67, 147, 0.45) !important;
+    }
+
+    /* ── Recording Button (amber gradient) ── */
+    .btn-warning {
+      background: linear-gradient(135deg, #fdcb6e, #e17055) !important;
+      box-shadow: 0 4px 15px rgba(225, 112, 85, 0.3) !important;
+      color: #1a1a2e !important;
+    }
+
+    .btn-warning:hover {
+      box-shadow: 0 6px 25px rgba(225, 112, 85, 0.45) !important;
+    }
+
+    /* ── Stop Button (red gradient) ── */
+    .btn-danger {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
+      box-shadow: 0 4px 15px rgba(238, 90, 36, 0.3) !important;
+    }
+
+    .btn-danger:hover {
+      box-shadow: 0 6px 25px rgba(238, 90, 36, 0.45) !important;
+    }
+
+    /* ── Status Message ── */
     .status {
       font-size: 12px;
-      margin-top: 5px;
-      color: #27ae60;
-      font-weight: bold;
+      margin-top: 10px;
+      color: #55efc4;
+      font-weight: 600;
+      display: none;
+      text-align: center;
+      text-shadow: 0 0 10px rgba(85, 239, 196, 0.4);
+      animation: statusPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    /* ── Recording Status (inline) ── */
+    .status-msg {
+      font-size: 12px;
+      font-weight: 600;
+      color: #ff6b6b !important;
+      text-shadow: 0 0 10px rgba(255, 107, 107, 0.4);
+      animation: statusPulse 1.2s ease-in-out infinite;
+    }
+
+    /* ── Live Log ── */
+    .live-log {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #b0b0c0;
+    }
+
+    /* ── Hidden class for toggling ── */
+    .hidden {
       display: none;
     }
 
-    /* Hidden class for toggling */
-    .hidden {
-      display: none;
+    /* ── Body scrollbar ── */
+    body::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    body::-webkit-scrollbar-thumb {
+      background: rgba(162, 155, 254, 0.3);
+      border-radius: 5px;
     }
   </style>
 </head>
 
 <body>
+
+  <div class="popup-container">
 
   <h1>TruthLens Checker</h1>
 
@@ -104,8 +343,7 @@
   <div class="section">
     <label>CURRENT TAB</label>
     <button id="analyzeArticleBtn">Analyze Article on Page</button>
-    <button id="smartScreenshotBtn" style="margin-top: 5px; background-color: #9b59b6;">Smart Screenshot</button>
-
+    <button id="smartScreenshotBtn" class="btn-screenshot">Smart Screenshot</button>
   </div>
 
   <!-- MANUAL AUDIO SECTION -->
@@ -113,7 +351,7 @@
   <div class="section" id="manualAudioSection">
     <button id="startRecordBtn" class="btn btn-warning">🎙 Start Recording</button>
     <button id="stopRecordBtn" class="btn btn-danger hidden">⏹ Stop & Analyze</button>
-    <div id="recordingStatus" class="status-msg hidden" style="color: #e74c3c; margin-top:5px;">● Recording...</div>
+    <div id="recordingStatus" class="status-msg hidden" style="margin-top:8px;">● Recording...</div>
     <div id="audioLog" class="live-log"></div>
   </div>
 
