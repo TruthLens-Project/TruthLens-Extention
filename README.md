@@ -1,7 +1,7 @@
 # TruthLens - Advanced AI Fact-Verification System
 
 <div align="center">
-  <video src="https://drive.google.com/uc?export=download&id=1_rrHd1ir3929VBhhkNfu-StvqdPLOqJk" width="100%" height="auto" autoplay muted loop>
+  <video src="https://drive.google.com/file/d/1_rrHd1ir3929VBhhkNfu-StvqdPLOqJk/view?pli=1" width="100%" height="auto" autoplay muted loop>
     Your browser does not support the video tag.
   </video>
 </div>
