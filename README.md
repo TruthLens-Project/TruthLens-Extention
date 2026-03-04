@@ -1,11 +1,8 @@
 # TruthLens - Advanced AI Fact-Verification System
 
-
-<div align="center">
-  <video src="./demo_video.mp4" width="100%" height="auto" autoplay muted loop>
-    Your browser does not support the video tag.
-  </video>
-</div>
+<video src="https://raw.githubusercontent.com/TruthLens-Project/TruthLens-Extention/main/demo_video.mp4" width="100%" height="auto" controls autoplay muted loop>
+  Your browser does not support the video tag.
+</video>
 
 TruthLens is a professional-grade Chrome Extension that brings "Search-Before-Talk" AI verification to your browser. Unlike generic AI wrappers, TruthLens uses a robust 5-stage pipeline to cross-reference claims against Google Fact Check archives and live web search results before generating a verdict.
 
