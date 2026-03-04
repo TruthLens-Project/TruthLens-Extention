@@ -1,6 +1,6 @@
 # TruthLens - Advanced AI Fact-Verification System
 
-<video src="https://raw.githubusercontent.com/TruthLens-Project/TruthLens-Extention/main/demo_video.mp4" width="100%" height="auto" controls autoplay muted loop>
+<video src="demo_video.mp4" width="100%" height="auto" controls autoplay muted loop>
   Your browser does not support the video tag.
 </video>
 
