@@ -1,7 +1,7 @@
 # TruthLens - Advanced AI Fact-Verification System
 
 <div align="center">
-  <a href="./demo_video.mp4">
+  <a href="https://drive.google.com/file/d/1_rrHd1ir3929VBhhkNfu-StvqdPLOqJk/view?pli=1">
     <img src="./truthlens_video_thumbnail.png" alt="TruthLens Demo Video" width="100%">
   </a>
 </div>
