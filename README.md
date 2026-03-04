@@ -2,7 +2,7 @@
 
 
 <div align="center">
-  <video src="./demo_video.mp4" width="100%" height="auto" autoplay muted loop>
+  <video src="demo_video.mp4" width="100%" height="auto" autoplay muted loop>
     Your browser does not support the video tag.
   </video>
 </div>
